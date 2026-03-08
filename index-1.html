@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<title>Digital Narkotikastasjon – Vennesla kommune</title>
+
+<style>
+
+body{
+margin:0;
+font-family:"Segoe UI",Arial;
+background:#f4f6f9;
+}
+
+header{
+background:#00263a;
+color:white;
+padding:15px 30px;
+display:flex;
+align-items:center;
+justify-content:space-between;
+}
+
+.header-left{
+display:flex;
+align-items:center;
+gap:15px;
+}
+
+header img{
+height:50px;
+}
+
+.container{
+padding:30px;
+}
+
+.dashboard{
+display:flex;
+gap:20px;
+margin-bottom:30px;
+}
+
+.card{
+background:white;
+padding:20px;
+flex:1;
+border-radius:8px;
+box-shadow:0 3px 10px rgba(0,0,0,0.08);
+}
+
+.lommer-grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+gap:15px;
+}
+
+.lomme{
+background:white;
+padding:15px;
+border-radius:8px;
+cursor:pointer;
+box-shadow:0 3px 10px rgba(0,0,0,0.08);
+}
+
+.lomme:hover{
+transform:translateY(-4px);
+}
+
+.modal{
+position:fixed;
+inset:0;
+background:rgba(0,0,0,0.5);
+display:none;
+justify-content:center;
+align-items:center;
+}
+
+.modal-content{
+background:white;
+padding:25px;
+width:400px;
+border-radius:8px;
+}
+
+input,button{
+width:100%;
+padding:8px;
+margin-top:8px;
+}
+
+button{
+background:#00263a;
+color:white;
+border:none;
+cursor:pointer;
+}
+
+.status{
+margin-top:15px;
+padding:10px;
+border-radius:5px;
+display:none;
+}
+
+.success{background:#d4edda;color:#155724;}
+.error{background:#f8d7da;color:#721c24;}
+
+#loginBox{
+max-width:400px;
+margin:100px auto;
+text-align:center;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="loginBox">
+<h2>Innlogging</h2>
+<input id="brukernavn" placeholder="Brukernavn">
+<button onclick="login()">Logg inn</button>
+<p id="loginFeil" style="color:red;"></p>
+</div>
+
+<header id="header" style="display:none">
+
+<div class="header-left">
+<img src="logo.png">
+<div>Digital Narkotikastasjon – Kvernvollen</div>
+</div>
+
+<div class="header-right">
+<span id="brukerInfo"></span>
+<button onclick="logout()">Logg ut</button>
+</div>
+
+</header>
+
+<div class="container" id="appContent" style="display:none">
+
+<div class="dashboard">
+
+<div class="card">
+<h3>Totalt lommer</h3>
+<div id="totaltLommer">-</div>
+</div>
+
+<div class="card">
+<h3>Uttak i system</h3>
+<div id="totaltUttak">-</div>
+</div>
+
+</div>
+
+<h2>Lageroversikt</h2>
+
+<div class="lommer-grid" id="lommerGrid"></div>
+
+<div id="status" class="status"></div>
+
+</div>
+
+<div class="modal" id="modal">
+
+<div class="modal-content">
+
+<h3 id="modalTitle"></h3>
+
+<input id="medisin" placeholder="Medisin">
+<input id="styrke" placeholder="Styrke mg">
+<input id="antall" placeholder="Antall">
+<input id="bruker2" placeholder="Bruker 2 (godkjenner)">
+
+<button onclick="paafyll()">Registrer påfyll</button>
+<button onclick="uttak()">Registrer uttak</button>
+<button onclick="closeModal()">Lukk</button>
+
+</div>
+
+</div>
+
+<script>
+
+const API="http://127.0.0.1:8000"
+
+let valgtLomme=null
+let bruker=null
+
+function visStatus(msg,type){
+
+const s=document.getElementById("status")
+
+s.className="status "+type
+s.innerText=msg
+s.style.display="block"
+
+setTimeout(()=>s.style.display="none",3000)
+
+}
+
+function login(){
+
+const navn=document.getElementById("brukernavn").value
+
+if(!navn){
+document.getElementById("loginFeil").innerText="Skriv brukernavn"
+return
+}
+
+bruker={
+brukernavn:navn,
+rolle:navn==="leder"?"leder":"ansatt"
+}
+
+document.getElementById("loginBox").style.display="none"
+document.getElementById("header").style.display="flex"
+document.getElementById("appContent").style.display="block"
+
+document.getElementById("brukerInfo").innerText=
+bruker.brukernavn+" ("+bruker.rolle+")"
+
+hentLommer()
+hentLogg()
+
+}
+
+function logout(){
+location.reload()
+}
+
+async function hentLommer(){
+
+const res=await fetch(API+"/lommer")
+const data=await res.json()
+
+document.getElementById("totaltLommer").innerText=data.length
+
+const grid=document.getElementById("lommerGrid")
+
+grid.innerHTML=""
+
+data.forEach(l=>{
+
+grid.innerHTML+=`
+
+<div class="lomme" onclick="openModal(${l.id})">
+
+<strong>Lomme ${l.id}</strong><br>
+
+${l.medisin || "Ingen medisin"}<br>
+
+${l.antall} stk
+
+</div>
+
+`
+
+})
+
+}
+
+async function hentLogg(){
+
+const res=await fetch(API+"/logg/uttak")
+const data=await res.json()
+
+document.getElementById("totaltUttak").innerText=data.length
+
+}
+
+function openModal(id){
+
+valgtLomme=id
+
+document.getElementById("modalTitle").innerText="Lomme "+id
+
+document.getElementById("modal").style.display="flex"
+
+}
+
+function closeModal(){
+
+document.getElementById("modal").style.display="none"
+
+}
+
+async function paafyll(){
+
+const body={
+
+lomme_id:valgtLomme,
+
+medisin:document.getElementById("medisin").value,
+
+styrke:Number(document.getElementById("styrke").value),
+
+antall:Number(document.getElementById("antall").value),
+
+signatur1:bruker.brukernavn,
+
+signatur2:document.getElementById("bruker2").value
+
+}
+
+const res=await fetch(API+"/paafyll",{
+
+method:"POST",
+
+headers:{"Content-Type":"application/json"},
+
+body:JSON.stringify(body)
+
+})
+
+const data=await res.json()
+
+if(data.detail){
+
+visStatus(data.detail,"error")
+
+}else{
+
+visStatus("Påfyll registrert","success")
+
+hentLommer()
+
+closeModal()
+
+}
+
+}
+
+async function uttak(){
+
+const body={
+
+lomme_id:valgtLomme,
+
+pasient:"Pasient",
+
+ln:"LN",
+
+antall:Number(document.getElementById("antall").value),
+
+signatur1:bruker.brukernavn,
+
+signatur2:document.getElementById("bruker2").value
+
+}
+
+const res=await fetch(API+"/uttak",{
+
+method:"POST",
+
+headers:{"Content-Type":"application/json"},
+
+body:JSON.stringify(body)
+
+})
+
+const data=await res.json()
+
+if(data.detail){
+
+visStatus(data.detail,"error")
+
+}else{
+
+visStatus("Uttak registrert","success")
+
+hentLommer()
+
+hentLogg()
+
+closeModal()
+
+}
+
+}
+
+</script>
+
+</body>
+</html>
